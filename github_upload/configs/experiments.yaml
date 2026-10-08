@@ -1,0 +1,179 @@
+# Executable release presets. Values preserve the recorded runner families.
+# Historical source/environment reconciliation is documented in training/README.md.
+schema_version: 1
+seeds: [23, 7, 42]
+
+experiments:
+  plain_label_only: &plain
+    runner: run_plain_ssl_3k
+    dataset: pathfinder
+    protocol: "Plain control runner: CUDA FP16 autocast + GradScaler; CPU FP32; grouped AdamW decay."
+    options: &plain_options
+      condition: connectivity
+      model-type: multitask_plain
+      width: 32
+      train-split: train_4000
+      view: dashed_with_points
+      bridge-thickness: 3.0
+      epochs: 200
+      batch-size: 32
+      optimizer-type: adamw
+      lr: 0.001
+      weight-decay: 0.0001
+      scheduler-type: warmup_cosine
+      warmup-epochs: 5
+      min-lr: 0.000001
+      aux-weight: 0.5
+      augmentation: dihedral_shift
+  plain_global:
+    <<: *plain
+    options: {<<: *plain_options, condition: betti0}
+  plain_permuted:
+    <<: *plain
+    options: {<<: *plain_options, condition: shuffled_qati_delta}
+  plain_relative:
+    runner: run_datasize_ablation
+    dataset: pathfinder
+    protocol: "Relative row uses the data-scaling runner, as in the recorded table; not the Plain control runner."
+    options: &scaling_options
+      models: [plain]
+      splits: [train_4000]
+      view: dashed_with_points
+      epochs: 200
+      batch-size: 32
+      lr: 0.001
+      weight-decay: 0.0001
+      warmup-epochs: 5
+      min-lr: 0.000001
+      aux-weight: 0.5
+      augmentation: dihedral_shift
+      precision: bf16
+  data_scaling:
+    runner: run_datasize_ablation
+    dataset: pathfinder
+    protocol: "Swin overrides LR=0.0001, 10 warmup epochs, decay=0.05 on eligible weights only. CNN decay applies to all parameters."
+    options:
+      <<: *scaling_options
+      models: [plain, cnn_s, swin_t]
+      splits: &scaling_splits [train_250, train_500, train_1000, train_2000, train_4000, train_8000, train_16000, train_32000]
+  capacity_cnn:
+    runner: run_model_size_ablation_16k
+    dataset: pathfinder
+    protocol: "Relative supervision; CNN AdamW decay applies to all parameters."
+    options:
+      models: [plain, cnn_s]
+      plain-widths: [2, 4, 6, 8, 16, 21, 32, 44, 64, 88]
+      cnn-s-widths: [1, 2, 3, 4, 8, 12, 16, 24, 32, 48]
+      train-split: train_16000
+      view: dashed_with_points
+      epochs: 200
+      batch-size: 32
+      lr: 0.001
+      weight-decay: 0.0001
+      warmup-epochs: 5
+      min-lr: 0.000001
+      aux-weight: 0.5
+      augmentation: dihedral_shift
+      precision: bf16
+  capacity_swin:
+    runner: run_swin_capacity_ablation
+    dataset: pathfinder
+    protocol: "Six scratch Swin variants; relative loss weight=0.5, min LR=0.000001, clipping=1.0, D4/shift in runner."
+    options:
+      configs: [swin_tiny_27m, swin_64_12m, swin_48_6m, swin_32_2m5, swin_16_490k, swin_12_273k]
+      train-split: train_16000
+      view: dashed_with_points
+      epochs: 200
+      batch-size: 32
+      lr: 0.0001
+      weight-decay: 0.05
+      warmup-epochs: 10
+      precision: bf16
+  hgru:
+    runner: run_hgru_datasize_ablation
+    dataset: pathfinder
+    protocol: "Label-only; NAdam, zero decay, no scheduler, clipping=1.0, CUDA BF16. Serial jobs for portable execution."
+    options:
+      splits: *scaling_splits
+      epochs: 200
+      batch-size: 32
+      lr: 0.001
+      max-parallel: 1
+  pretrained: &pretrained
+    runner: run_pretrained_backbones_4k
+    dataset: pathfinder
+    protocol: "ImageNet ResNet-18/Swin-T; official weights must be cached or downloaded by torchvision."
+    options: &pretrained_options
+      condition: qati_delta
+      models: [resnet18, swin_t]
+      train-split: train_4000
+      view: dashed_with_points
+      epochs: 200
+      batch-size: 32
+      lr: 0.0001
+      weight-decay: 0.0001
+      warmup-epochs: 5
+      min-lr: 0.000001
+      aux-weight: 0.5
+      augmentation: dihedral_shift
+      precision: bf16
+  pretrained_label_only:
+    <<: *pretrained
+    options: {<<: *pretrained_options, condition: connectivity, aux-weight: 0.0}
+  spt_pretrain:
+    runner: pretrain_plain_spt
+    dataset: pathfinder
+    protocol: "FP32 masked reconstruction, 16x16 patches, 50% masking; no classification labels or auxiliary targets."
+    options:
+      train-split: train_4000
+      view: dashed_with_points
+      augmentation: dihedral_shift
+      width: 32
+      patch-size: 16
+      mask-ratio: 0.5
+      epochs: 200
+      batch-size: 32
+      lr: 0.001
+      weight-decay: 0.0001
+      warmup-epochs: 5
+      min-lr: 0.000001
+  spt_label_only:
+    <<: *plain
+    options:
+      <<: *plain_options
+      condition: plain_spt_conn_only
+      pretrained-backbone-path: "{spt_dir}/plain_w32_spt_s{seed}.pt"
+  spt_relative:
+    <<: *plain
+    options:
+      <<: *plain_options
+      condition: multitask_plain_spt_qati_delta
+      pretrained-backbone-path: "{spt_dir}/plain_w32_spt_s{seed}.pt"
+  dense_label_only:
+    <<: *plain
+    dataset: dense_clutter
+    options: {<<: *plain_options, condition: connectivity, train-split: train}
+  dense_relative:
+    <<: *plain
+    dataset: dense_clutter
+    options: {<<: *plain_options, condition: qati_delta, train-split: train}
+  drive:
+    runner: run_drive_experiment
+    dataset: drive
+    protocol: "0.5 BCE + 0.5 Dice in FOV; conn=0; auxiliary=0.05 except seg_only; best validation Dice. New runs seed Python random explicitly."
+    backbones: [plain, cnn_s, resnet18, resnet152]
+    conditions: [seg_only, global_betti, shuffled_control, qati_only]
+    configuration:
+      data: {image_size: 512, max_shift: 10}
+      training:
+        optimizer: adamw
+        learning_rate: 0.001
+        weight_decay: 0.0001
+        scheduler: cosine
+        warmup_epochs: 5
+        seg_weight: 1.0
+        conn_weight: 0.0
+        aux_weight: 0.05
+        batch_size: 16
+        epochs: 60
+        precision: bf16
