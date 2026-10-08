@@ -1,0 +1,6 @@
+# Install matching PyTorch/torchvision builds for your device.
+# API requirements only; not a recovered historical training lockfile.
+torch>=2.0
+torchvision>=0.15
+numpy>=1.24
+# timm is optional, for legacy use_timm=True paths (not the paper workflow).
