@@ -1,0 +1,22 @@
+# Generated data/results are not source code. Preparation code is in data_generation/.
+/datasets/
+/data/
+/scratch/
+/tmp/
+/outputs/
+/checkpoints/
+/logs/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.pt
+*.pth
+*.ckpt
+*.log
+.DS_Store
+Thumbs.db
