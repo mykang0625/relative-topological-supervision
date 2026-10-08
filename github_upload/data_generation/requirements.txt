@@ -1,6 +1,0 @@
-# Preparation check environment: Python 3.10.20; not a historical training lock.
-numpy==2.2.6
-scipy==1.15.3
-Pillow==11.1.0
-matplotlib==3.10.8
-opencv-python==4.13.0.92
